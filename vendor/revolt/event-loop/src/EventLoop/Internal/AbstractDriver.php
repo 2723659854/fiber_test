@@ -530,6 +530,7 @@ abstract class AbstractDriver implements Driver
 
     private function createLoopFiber(): void
     {
+        var_dump("创建轮训协程");
         $this->fiber = new \Fiber(function (): void {
             $this->stopped = false;
 
@@ -557,6 +558,7 @@ abstract class AbstractDriver implements Driver
 
     private function createCallbackFiber(): void
     {
+        var_dump("创建回调协程");
         $this->callbackFiber = new \Fiber(function (): void {
             do {
                 $this->invokeMicrotasks();
@@ -564,6 +566,7 @@ abstract class AbstractDriver implements Driver
                 while (!$this->callbackQueue->isEmpty()) {
                     /** @var DriverCallback $callback */
                     $callback = $this->callbackQueue->dequeue();
+                    var_dump("打印回调函数",$callback);
 
                     if (!isset($this->callbacks[$callback->id]) || !$callback->invokable) {
                         unset($callback);

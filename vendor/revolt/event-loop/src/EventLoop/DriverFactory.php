@@ -28,17 +28,21 @@ final class DriverFactory
             }
 
             if (UvDriver::isSupported()) {
+                var_dump("uv");
                 return new UvDriver();
             }
 
             if (EvDriver::isSupported()) {
+                var_dump('ev');
                 return new EvDriver();
             }
 
             if (EventDriver::isSupported()) {
+                var_dump('event');
                 return new EventDriver();
             }
 
+            var_dump('select');
             return new StreamSelectDriver();
         })();
 
