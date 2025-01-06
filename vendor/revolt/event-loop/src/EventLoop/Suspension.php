@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Revolt\EventLoop;
 
 /**
+ * 应用于运行和暂停事件循环，而不是直接与协程交互
  * Should be used to run and suspend the event loop instead of directly interacting with fibers.
  *
  * **Example**
@@ -25,11 +26,13 @@ namespace Revolt\EventLoop;
 interface Suspension
 {
     /**
+     * 协程复位
      * @param T $value The value to return from the call to {@see suspend()}.
      */
     public function resume(mixed $value = null): void;
 
     /**
+     * 协程挂起
      * Returns the value provided to {@see resume()} or throws the exception provided to {@see throw()}.
      *
      * @return T

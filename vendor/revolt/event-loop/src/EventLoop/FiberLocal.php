@@ -17,6 +17,10 @@ final class FiberLocal
     private static ?\Fiber $mainFiber = null;
     private static ?\WeakMap $localStorage = null;
 
+    /**
+     * 清理协程局部变量
+     * @return void
+     */
     public static function clear(): void
     {
         if (self::$localStorage === null) {
@@ -32,6 +36,10 @@ final class FiberLocal
         unset(self::$localStorage[$fiber]);
     }
 
+    /**
+     * 获取一个协程
+     * @return \WeakMap
+     */
     private static function getFiberStorage(): \WeakMap
     {
         $fiber = \Fiber::getCurrent();

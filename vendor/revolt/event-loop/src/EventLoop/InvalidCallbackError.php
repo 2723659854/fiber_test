@@ -12,6 +12,7 @@ final class InvalidCallbackError extends \Error
     public const E_INVALID_IDENTIFIER = 2;
 
     /**
+     * 必须返回非空的值
      * MUST be thrown if any callback returns a non-null value.
      */
     public static function nonNullReturn(string $callbackId, \Closure $closure): self
@@ -24,6 +25,7 @@ final class InvalidCallbackError extends \Error
     }
 
     /**
+     * 会点函数标识符不合法
      * MUST be thrown if any operation (except disable() and cancel()) is attempted with an invalid callback identifier.
      *
      * An invalid callback identifier is any identifier that is not yet emitted by the driver or cancelled by the user.

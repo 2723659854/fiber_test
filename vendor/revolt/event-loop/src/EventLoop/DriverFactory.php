@@ -14,14 +14,19 @@ use Revolt\EventLoop\Driver\UvDriver;
 final class DriverFactory
 {
     /**
+     * 选择最匹配的驱动
      * Creates a new loop instance and chooses the best available driver.
      *
      * @return Driver
      *
      * @throws \Error If an invalid class has been specified via REVOLT_LOOP_DRIVER
+     * @note 从以下代码看出，io性能：uv > ev > event > select
+     * @note uv（libuv）> epoll > poll > select
+     * @note uv和 ev 是封装的跨平台io模型，底层是epoll和poll
      */
     public function create(): Driver
     {
+        /** 使用匿名函数获取驱动 */
         $driver = (function () {
             if ($driver = $this->createDriverFromEnv()) {
                 return $driver;
@@ -54,6 +59,7 @@ final class DriverFactory
     }
 
     /**
+     * 从env创建模型
      * @return Driver|null
      */
     private function createDriverFromEnv(): ?Driver
