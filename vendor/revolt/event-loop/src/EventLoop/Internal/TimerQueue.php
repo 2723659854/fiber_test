@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Revolt\EventLoop\Internal;
 
 /**
+ * 定时任务，全部放在队列里面的
  * Uses a binary tree stored in an array to implement a heap.
  *
  * @internal
@@ -18,6 +19,7 @@ final class TimerQueue
     private array $pointers = [];
 
     /**
+     * 将回调函数插入到队列
      * Inserts the callback into the queue.
      *
      * Time complexity: O(log(n)).
@@ -25,7 +27,7 @@ final class TimerQueue
     public function insert(TimerCallback $callback): void
     {
         \assert(!isset($this->pointers[$callback->id]));
-
+        /** 统计 */
         $node = \count($this->callbacks);
         $this->callbacks[$node] = $callback;
         $this->pointers[$callback->id] = $node;
@@ -34,6 +36,7 @@ final class TimerQueue
     }
 
     /**
+     * 从队列中移除回调函数
      * Removes the given callback from the queue.
      *
      * Time complexity: O(log(n)).
@@ -50,6 +53,7 @@ final class TimerQueue
     }
 
     /**
+     * 如果回调已过期，则删除并返回堆顶部的回调，否则返回null。
      * Deletes and returns the callback on top of the heap if it has expired, otherwise null is returned.
      *
      * Time complexity: O(log(n)).
@@ -63,7 +67,7 @@ final class TimerQueue
         if (!$this->callbacks) {
             return null;
         }
-
+        /** 如果回调函数还没有到执行时间 ，则返回空 */
         $callback = $this->callbacks[0];
         if ($callback->expiration > $now) {
             return null;
@@ -75,6 +79,7 @@ final class TimerQueue
     }
 
     /**
+     * 返回顶部回调函数的执行时刻
      * Returns the expiration time value at the top of the heap.
      *
      * Time complexity: O(1).
@@ -87,18 +92,21 @@ final class TimerQueue
     }
 
     /**
+     * 从给定节点向上重建数据数组。
      * @param int $node Rebuild the data array from the given node upward.
      */
     private function heapifyUp(int $node): void
     {
         $entry = $this->callbacks[$node];
         while ($node !== 0 && $entry->expiration < $this->callbacks[$parent = ($node - 1) >> 1]->expiration) {
+            /** 交换数据 */
             $this->swap($node, $parent);
             $node = $parent;
         }
     }
 
     /**
+     * 从给定节点向下重建数据数组。
      * @param int $node Rebuild the data array from the given node downward.
      */
     private function heapifyDown(int $node): void
@@ -122,6 +130,12 @@ final class TimerQueue
         }
     }
 
+    /**
+     * 交换回调函数位置
+     * @param int $left
+     * @param int $right
+     * @return void
+     */
     private function swap(int $left, int $right): void
     {
         $temp = $this->callbacks[$left];
@@ -134,6 +148,7 @@ final class TimerQueue
     }
 
     /**
+     * 移除指定节点的回调函数
      * @param int $node Remove the given node and then rebuild the data array.
      */
     private function removeAndRebuild(int $node): void
