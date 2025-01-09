@@ -720,7 +720,7 @@ abstract class AbstractDriver implements Driver
      */
     private function createLoopFiber(): void
     {
-        //var_dump("创建轮训协程");
+        var_dump("创建轮询协程");
         $this->fiber = new \Fiber(function (): void {
             $this->stopped = false;
             /** 执行回调 */
@@ -754,7 +754,7 @@ abstract class AbstractDriver implements Driver
      */
     private function createCallbackFiber(): void
     {
-        //var_dump("创建回调协程");
+        var_dump("创建回调协程");
         $this->callbackFiber = new \Fiber(function (): void {
             do {
                 $this->invokeMicrotasks();

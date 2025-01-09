@@ -4,14 +4,12 @@
 require 'vendor/autoload.php';
 // 引入Revolt\EventLoop命名空间
 use Revolt\EventLoop;
-
 // 创建服务器套接字资源，基于TCP协议监听在本地127.0.0.1的8888端口
 $serverSocket = stream_socket_server("tcp://127.0.0.1:8888", $errno, $errstr);
 if (!$serverSocket) {
     die("无法创建服务器套接字: $errstr ($errno)");
 }
 echo "=================================================\r\n";
-
 // 当有新的客户端连接时的回调函数
 $onConnect = function ($clientSocket) {
     echo "客户端发起连接\r\n";
@@ -31,9 +29,14 @@ $onConnect = function ($clientSocket) {
             fclose($clientSocket);
             return;
         }
+        if (!is_resource($clientSocket)) {
+            fclose($clientSocket);
+            return;
+        }
         var_dump($data);
         // 处理客户端数据，这里简单回显
         $response = "收到你的消息: " . $data;
+        usleep(1000000);
         fwrite($clientSocket, $response);
     };
 
