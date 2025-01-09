@@ -10,38 +10,41 @@ if (!$serverSocket) {
     die("无法创建服务器套接字: $errstr ($errno)");
 }
 echo "=================================================\r\n";
+/** 保存所有的客户端 */
+$servers = [];
 // 当有新的客户端连接时的回调函数
 $onConnect = function ($clientSocket) {
     echo "客户端发起连接\r\n";
     // 当从客户端接收到数据时的回调函数
     $onData = function () use($clientSocket){
+        global $servers;
         echo "接收到客户端数据\r\n";
         $data = fread($clientSocket, 1024);
         if ($data === false) {
-            var_dump("未接受到数据，关闭1");
             // 如果读取数据出错，关闭客户端连接
-            fclose($clientSocket);
+            //fclose($clientSocket);
+            EventLoop::cancel($servers[(int)$clientSocket]);
             return;
         }
         if ($data === "") {
-            var_dump("接受的数据为空，关闭2");
             // 如果客户端关闭连接，也关闭对应的客户端套接字
-            fclose($clientSocket);
+            EventLoop::cancel($servers[(int)$clientSocket]);
             return;
         }
         if (!is_resource($clientSocket)) {
-            fclose($clientSocket);
+            EventLoop::cancel($servers[(int)$clientSocket]);
             return;
         }
-        var_dump($data);
         // 处理客户端数据，这里简单回显
         $response = "收到你的消息: " . $data;
+        echo $response."\r\n";
         usleep(1000000);
         fwrite($clientSocket, $response);
     };
+    global $servers;
 
     // 为客户端套接字添加可读事件监听器，当有数据可读时触发$onData回调
-    EventLoop::onReadable($clientSocket, $onData);
+    $servers[(int)$clientSocket] = EventLoop::onReadable($clientSocket, $onData);
 };
 
 // 为服务器套接字添加可读事件监听器，当有新客户端连接时触发$onConnect回调
