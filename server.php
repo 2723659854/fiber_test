@@ -25,7 +25,6 @@ $onConnect = function ($clientSocket) {
             $data = fread($clientSocket, 1024);
             if ($data === false) {
                 // 如果读取数据出错，关闭客户端连接
-                //fclose($clientSocket);
                 EventLoop::cancel($servers[(int)$clientSocket]);
                 return;
             }
@@ -35,6 +34,7 @@ $onConnect = function ($clientSocket) {
                 return;
             }
             if (!is_resource($clientSocket)) {
+                // 连接已断开
                 EventLoop::cancel($servers[(int)$clientSocket]);
                 return;
             }
@@ -45,7 +45,6 @@ $onConnect = function ($clientSocket) {
             fwrite($clientSocket, $response);
         });
         $fiber->start();
-
     };
 
 
@@ -59,8 +58,6 @@ EventLoop::onReadable($serverSocket, function () use ($serverSocket, $onConnect)
     $clientSocket = stream_socket_accept($serverSocket);
     if ($clientSocket) {
         // 调用 $onConnect 回调函数处理新连接
-        //todo 创建协程来处理
-
         $fiber = new Fiber(function () use($clientSocket,$onConnect) {
             $onConnect($clientSocket);
         });
