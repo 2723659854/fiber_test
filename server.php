@@ -19,7 +19,7 @@ $servers = [];
 $messageFibers = [];
 // 当有新的客户端连接时的回调函数
 $onConnect = function ($clientSocket) {
-    echo "客户端发起连接\r\n";
+
     // 当从客户端接收到数据时的回调函数
     $onData = function () use($clientSocket){
         global $messageFibers;
@@ -32,7 +32,7 @@ $onConnect = function ($clientSocket) {
                     $fiber->resume();
                 }
                 global $servers;
-                echo "接收到客户端数据\r\n";
+
                 $data = fread($clientSocket, 1024);
                 if ($data === false) {
                     // 如果读取数据出错，关闭客户端连接
@@ -52,9 +52,9 @@ $onConnect = function ($clientSocket) {
                     unset($messageFibers[(int)$clientSocket]);
                     return;
                 }
-                fwrite($clientSocket, $data . "\r");
+                echo $data;
+                echo "\r\n";
 
-                echo "发送数据给客户端完成\r\n";
             });
             $messageFibers[(int)$clientSocket]->start();
         }else{
