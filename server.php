@@ -27,28 +27,26 @@ $onConnect = function ($clientSocket) {
             $data = fread($clientSocket, 1024);
             if ($data === false) {
                 // 如果读取数据出错，关闭客户端连接
-                echo "如果读取数据出错，关闭客户端连接\r\n";
+                //echo "如果读取数据出错，关闭客户端连接\r\n";
                 EventLoop::cancel($servers[(int)$clientSocket]);
                 return;
             }
             if ($data === "") {
                 // 如果客户端关闭连接，也关闭对应的客户端套接字
-                echo "如果客户端关闭连接，也关闭对应的客户端套接字\r\n";
+                //echo "如果客户端关闭连接，也关闭对应的客户端套接字\r\n";
                 EventLoop::cancel($servers[(int)$clientSocket]);
                 return;
             }
             if (!is_resource($clientSocket)) {
                 // 连接已断开
-                echo "连接已断开\r\n";
+                //echo "连接已断开\r\n";
                 EventLoop::cancel($servers[(int)$clientSocket]);
                 return;
             }
             // 处理客户端数据，这里简单回显
-            $response = "收到你的消息: " . $data;
-            echo $response."\r\n";
-            usleep(10);
-            //fwrite($clientSocket, $response);
-            fwrite($clientSocket, 'close');
+            fwrite($clientSocket, $data."\r");
+            fwrite($clientSocket, "close\r");
+            //var_dump("发送数据给客户端完成");
         });
         $fiber->start();
     };
