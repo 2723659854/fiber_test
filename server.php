@@ -55,6 +55,7 @@ $onConnect = function ($clientSocket) {
                 echo $data;
                 echo "\r\n";
 
+                fwrite($clientSocket, $data);
             });
             $messageFibers[(int)$clientSocket]->start();
         }else{
