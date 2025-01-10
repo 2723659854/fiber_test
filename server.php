@@ -10,6 +10,8 @@ $serverSocket = stream_socket_server("tcp://127.0.0.1:8888", $errno, $errstr);
 if (!$serverSocket) {
     die("无法创建服务器套接字: $errstr ($errno)");
 }
+/** 设置为异步 */
+stream_set_blocking($serverSocket, 0);
 echo "=================================================\r\n";
 /** 保存所有的客户端 */
 $servers = [];
