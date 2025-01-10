@@ -58,11 +58,12 @@ while ($allClients) {
                 }
                 if ($content === "") {
                     // 如果暂时没读到数据，暂停当前协程
-                    usleep(10000);
+                    usleep(1);
                     $fiber->suspend();
                 }
                 $content = trim($content,"\r");
                 echo "server:{$content}";
+                echo "\r\n";
                 if ($content == 'close'){
                     // 如果读取数据出错，关闭客户端连接，移除相关记录
                     fclose($stream);
@@ -88,19 +89,23 @@ while ($allClients) {
         if (!isset($writeClientFibers[$fd])) {
             // 如果还没有为该客户端创建写协程，创建一个协程用于发送数据
             $writeClientFibers[$fd] = new Fiber(function () use ($stream, $fd,$writeClientFibers) {
+                $fiber = Fiber::getCurrent();
+                if ($fiber->isSuspended()){
+                    $fiber->resume();
+                }
                 fwrite($stream, "你好，服务端{$fd}\r\n");
                 echo "client:你好，服务端{$fd}\r\n";
                 // 发送完后，暂停当前协程
-                usleep(10000);
-                $fiber = Fiber::getCurrent();
+                usleep(1);
                 $fiber->suspend();
             });
             $writeClientFibers[$fd]->start();
 
         } else {
             // 如果写协程已存在，恢复写协程执行
-            $fiber = $writeClientFibers[$fd];
+            $fiber =  $writeClientFibers[$fd] ;
             if ($fiber->isSuspended()) {
+                echo "唤醒写协程{$fd}\r\n";
                 $fiber->resume();
             }
         }

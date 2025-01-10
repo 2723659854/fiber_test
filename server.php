@@ -15,43 +15,55 @@ stream_set_blocking($serverSocket, 0);
 echo "=================================================\r\n";
 /** 保存所有的客户端 */
 $servers = [];
+/** 客户端消息协程数组 */
+$messageFibers = [];
 // 当有新的客户端连接时的回调函数
 $onConnect = function ($clientSocket) {
     echo "客户端发起连接\r\n";
     // 当从客户端接收到数据时的回调函数
     $onData = function () use($clientSocket){
+        global $messageFibers;
+        if (!isset($messageFibers[(int)$clientSocket])) {
+            $messageFibers[(int)$clientSocket] = new Fiber(function () use ($clientSocket,$messageFibers) {
+                /** 获取当前协程  */
+                $fiber = Fiber::getCurrent();
+                /** 唤醒协程 */
+                if ($fiber->isSuspended()) {
+                    $fiber->resume();
+                }
+                global $servers;
+                echo "接收到客户端数据\r\n";
+                $data = fread($clientSocket, 1024);
+                if ($data === false) {
+                    // 如果读取数据出错，关闭客户端连接
+                    EventLoop::cancel($servers[(int)$clientSocket]);
+                    unset($messageFibers[(int)$clientSocket]);
+                    return;
+                }
+                /** 如果读取的数据为空，则暂停当前协程 */
+                if ($data === "") {
+                    usleep(2);
+                    $fiber->suspend();
+                    return;
+                }
+                if (!is_resource($clientSocket)) {
+                    // 连接已断开
+                    EventLoop::cancel($servers[(int)$clientSocket]);
+                    unset($messageFibers[(int)$clientSocket]);
+                    return;
+                }
+                fwrite($clientSocket, $data . "\r");
 
-        $fiber = new Fiber(function ()use($clientSocket){
-            global $servers;
-            echo "接收到客户端数据\r\n";
-            $data = fread($clientSocket, 1024);
-            if ($data === false) {
-                // 如果读取数据出错，关闭客户端连接
-                //echo "如果读取数据出错，关闭客户端连接\r\n";
-                EventLoop::cancel($servers[(int)$clientSocket]);
-                return;
+                echo "发送数据给客户端完成\r\n";
+            });
+            $messageFibers[(int)$clientSocket]->start();
+        }else{
+            /** 如果协程已暂停，则唤醒协程 */
+            if ($messageFibers[(int)$clientSocket]->isSuspended()){
+                $messageFibers[(int)$clientSocket]->resume();
             }
-            if ($data === "") {
-                // 如果客户端关闭连接，也关闭对应的客户端套接字
-                //echo "如果客户端关闭连接，也关闭对应的客户端套接字\r\n";
-                EventLoop::cancel($servers[(int)$clientSocket]);
-                return;
-            }
-            if (!is_resource($clientSocket)) {
-                // 连接已断开
-                //echo "连接已断开\r\n";
-                EventLoop::cancel($servers[(int)$clientSocket]);
-                return;
-            }
-            // 处理客户端数据，这里简单回显
-            fwrite($clientSocket, $data."\r");
-            fwrite($clientSocket, "close\r");
-            //var_dump("发送数据给客户端完成");
-        });
-        $fiber->start();
+        }
     };
-
-
     global $servers;
     // 为客户端套接字添加可读事件监听器，当有数据可读时触发$onData回调
     $servers[(int)$clientSocket] = EventLoop::onReadable($clientSocket, $onData);
