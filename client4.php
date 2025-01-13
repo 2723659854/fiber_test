@@ -18,12 +18,12 @@ while (true) {
         die('无法发送消息到服务器: '. socket_strerror(socket_last_error()));
     }
     echo "发送消息完成\r\n";
-// 接收服务器返回的响应
-    $response = socket_read($clientSocket, 11);
+    // 接收服务器返回的响应
+    $response = socket_read($clientSocket, 1024);
     if ($response === false) {
         die('无法接收服务器响应: '. socket_strerror(socket_last_error()));
     }
-// 输出服务器响应
+    // 输出服务器响应
     echo $response;
     echo "\r\n";
     //sleep(1);

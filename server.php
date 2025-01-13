@@ -2,8 +2,29 @@
 /** 以下是使用fiber协程创建的服务端 */
 // 引入自动加载文件（假设通过Composer管理依赖）
 require 'vendor/autoload.php';
+
 // 引入Revolt\EventLoop命名空间
 use Revolt\EventLoop;
+
+/**
+ * 关闭客户端
+ * @param $clientSocket
+ * @return void
+ */
+function closeClient($clientSocket)
+{
+    global $readServers, $writeFibers, $writeServers, $readFibers;
+    /** 首先移除客户端的读写事件 */
+    EventLoop::cancel($writeServers [(int)$clientSocket] ?? '');
+    EventLoop::cancel($readServers [(int)$clientSocket] ?? '');
+    /** 将客户端和协程从内存中移除 */
+    unset($readFibers[(int)$clientSocket]);
+    unset($readServers[(int)$clientSocket]);
+    unset($writeFibers[(int)$clientSocket]);
+    unset($writeServers[(int)$clientSocket]);
+    /** 关闭客户端 */
+    @fclose($clientSocket);
+}
 
 // 创建服务器套接字资源，基于TCP协议监听在本地127.0.0.1的8888端口
 $serverSocket = stream_socket_server("tcp://127.0.0.1:8888", $errno, $errstr);
@@ -12,144 +33,129 @@ if (!$serverSocket) {
 }
 /** 设置为异步 */
 stream_set_blocking($serverSocket, 0);
-echo "=================================================\r\n";
-/** 保存所有的客户端 */
-$servers = [];
-/** 客户端消息协程数组 */
-$messageFibers = [];
-/** 写写成 */
-$otherFibers = [];
+
+/** 读客户端 */
+$readServers = [];
 /** 写服务端 */
 $writeServers = [];
-// 当有新的客户端连接时的回调函数
+/** 客户端可读协程组 */
+$readFibers = [];
+/** 客户端可写协程组 */
+$writeFibers = [];
+/** 客户端连接事件 */
 $onConnect = function ($clientSocket) {
 
-    // 当从客户端接收到数据时的回调函数
-    $onData = function () use($clientSocket){
-        global $messageFibers;
-        if (!isset($messageFibers[(int)$clientSocket])) {
-            $messageFibers[(int)$clientSocket] = new Fiber(function () use ($clientSocket,$messageFibers) {
+    global $readServers, $writeServers;
+    /** 客户端可读事件 */
+    $onRead = function () use ($clientSocket) {
+        global $readFibers;
+        /** 如果这个客户端没有创建写协程 ，则创建写协程 */
+        if (!isset($readFibers[(int)$clientSocket])) {
+            $readFibers[(int)$clientSocket] = new Fiber(function () use ($clientSocket) {
                 /** 获取当前协程  */
                 $fiber = Fiber::getCurrent();
                 /** 唤醒协程 */
                 if ($fiber->isSuspended()) {
                     $fiber->resume();
                 }
-                global $servers;
-
-                while(true) {
-                    $metaData = stream_get_meta_data($clientSocket);
-                    if ($metaData['unread_bytes']>0) {
-                        $data = fread($clientSocket, 3);
-                        if ($data === false) {
-                            // 如果读取数据出错，关闭客户端连接
-                            EventLoop::cancel($servers[(int)$clientSocket]);
-                            unset($messageFibers[(int)$clientSocket]);
-                            unset($servers[(int)$clientSocket]);
-                            return;
-                        }
-                        /** 如果读取的数据为空，则暂停当前协程 */
-                        if ($data === "") {
-                            //usleep(2);
-                            $fiber->suspend();
-                            var_dump("读协程已挂起");
-                            return;
-                        }
-                        if (!is_resource($clientSocket)) {
-                            // 连接已断开
-                            EventLoop::cancel($servers[(int)$clientSocket]);
-                            unset($messageFibers[(int)$clientSocket]);
-                            return;
-                        }
-                        echo $data;
-                        echo "\r\n";
-                    }else{
-                        $fiber->suspend();
+                /** 为了保持协程存活，使用while循环 */
+                while (true) {
+                    /** 每次读取3个字节 */
+                    $data = fread($clientSocket, 3);
+                    /** 如果客户端已关闭，或者读取数据出错，则删除这个客户端的读写协程，并关闭客户端 */
+                    if (($data === false) || (!is_resource($clientSocket))) {
+                        closeClient($clientSocket);
+                        return;
                     }
+                    /** 如果有数据，则打印 */
+                    if ($data) {
+                        //todo  具体业务逻辑写在这里
+                        echo $data . "\r\n";
+                    }
+                    /** 读取一次后立即暂停当前协程，切换到其他协程 */
+                    $fiber->suspend();
                 }
             });
-            $messageFibers[(int)$clientSocket]->start();
-        }else{
+            /** 启动写协程 */
+            $readFibers[(int)$clientSocket]->start();
+        } else {
             /** 如果协程已暂停，则唤醒协程 */
-            if ($messageFibers[(int)$clientSocket]->isSuspended()){
-                $messageFibers[(int)$clientSocket]->resume();
+            if ($readFibers[(int)$clientSocket]->isSuspended()) {
+                $readFibers[(int)$clientSocket]->resume();
             }
-            if ($messageFibers[(int)$clientSocket]->isTerminated()){
-                $fd = (int)$clientSocket;
-                echo $fd."读协程已死\r\n";
+            /** 如果协程已死，则清理读写事件，并关闭客户端 */
+            if ($readFibers[(int)$clientSocket]->isTerminated()) {
+                closeClient($clientSocket);
+                return;
             }
         }
     };
-    global $servers;
-    // 为客户端套接字添加可读事件监听器，当有数据可读时触发$onData回调
-    $servers[(int)$clientSocket] = EventLoop::onReadable($clientSocket, $onData);
 
-    // 为客户端添加套字节可写事件
-    $onWrite = function ()use($clientSocket){
-        global $otherFibers;
-        if (!isset($otherFibers[(int)$clientSocket])) {
-            var_dump("创建写协程");
-            $otherFibers[(int)$clientSocket] = new Fiber(function () use ($clientSocket,$otherFibers){
+    /** 给客户端添加可读事件 ，并保存 */
+    $readServers[(int)$clientSocket] = EventLoop::onReadable($clientSocket, $onRead);
+
+    /** 客户端可写事件 */
+    $onWrite = function () use ($clientSocket) {
+        global $writeFibers;
+        /** 如果没有这个客户端的写协程，那么就创建 */
+        if (!isset($writeFibers[(int)$clientSocket])) {
+            $writeFibers[(int)$clientSocket] = new Fiber(function () use ($clientSocket) {
                 global $writeServers;
-                var_dump("写协程内部");
                 /** 获取当前协程  */
                 $fiber = Fiber::getCurrent();
                 /** 唤醒协程 */
                 if ($fiber->isSuspended()) {
                     $fiber->resume();
                 }
-                while(true){
+                while (true) {
                     /** 客户端已关闭，则取消写事件*/
-                    if (!is_resource($clientSocket)&& isset($writeServers [(int)$clientSocket])) {
-                        EventLoop::cancel($writeServers [(int)$clientSocket]);
-                        unset($otherFibers[(int)$clientSocket]);
-                        unset($writeServers[(int)$clientSocket]);
-                    }else{
-                        var_dump("发送数据给客户端");
-                        $length = @fwrite($clientSocket,'hello world');
+                    if (!is_resource($clientSocket)) {
+                        closeClient($clientSocket);
+                        return;
+                    } else {
+                        /** 向客户端发送数据，保持通信状态 */
+                        $length = @fwrite($clientSocket, 'hello');
+                        /** 写入失败，说明对方客户端已死 */
                         if ($length === false) {
-                            break;
+                            closeClient($clientSocket);return;
                         }
-                        var_dump($length); var_dump("挂起写协程");
                         /** 暂停当前协程 保证协程存活 */
                         $fiber->suspend();
                     }
                 }
-
-                // 暂停协程，等待更多数据
-                //Fiber::suspend();
             });
-            $otherFibers[(int)$clientSocket]->start();
-        }else{
-            $fiber = $otherFibers[(int)$clientSocket];
+            /** 启动写协程  */
+            $writeFibers[(int)$clientSocket]->start();
+        } else {
+            /** 唤醒写协程 */
+            $fiber = $writeFibers[(int)$clientSocket];
             if ($fiber->isSuspended()) {
-                var_dump("唤醒写协程");
                 $fiber->resume();
             }
-            if ($fiber->isTerminated()){
-                $fd = (int)$clientSocket;
-                echo $fd."写协程已死\r\n";
-                exit;
+            /** 写协程已死，则关闭客户端的所有协程和客户端 */
+            if ($fiber->isTerminated()) {
+                closeClient($clientSocket);
+                return;
             }
         }
     };
-    global $writeServers;
+    /** 给客户端添加可写事件 */
     $writeServers[(int)$clientSocket] = EventLoop::onWritable($clientSocket, $onWrite);
 };
 
-// 为服务器套接字添加可读事件监听器，当有新客户端连接时触发$onConnect回调
+/** 为服务器套接字添加可读事件监听器，当有新客户端连接时触发$onConnect回调 */
 EventLoop::onReadable($serverSocket, function () use ($serverSocket, $onConnect) {
     $clientSocket = stream_socket_accept($serverSocket);
     if ($clientSocket) {
         // 调用 $onConnect 回调函数处理新连接
-        $fiber = new Fiber(function () use($clientSocket,$onConnect) {
+        $fiber = new Fiber(function () use ($clientSocket, $onConnect) {
             $onConnect($clientSocket);
         });
         $fiber->start();
     }
 });
 
-// 启动事件循环，驱动协程运行，处理各种事件
+/** 启动事件循环，驱动协程运行，处理各种事件 */
 EventLoop::run();
 
 ?>
