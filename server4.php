@@ -23,10 +23,6 @@ if (!$serverSocket) {
 /** 设置为异步 */
 stream_set_blocking($serverSocket, 0);
 
-/** 读客户端 */
-$readServers = [];
-/** 写服务端 */
-$writeServers = [];
 /** 客户端可读协程组 */
 $readFibers = [];
 /** 客户端可写协程组 */
