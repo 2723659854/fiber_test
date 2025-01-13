@@ -33,7 +33,8 @@ while($allClients){
             unset($allClients[$fd]);
             echo "1关闭客户端{$fd}\r\n";
         }
-        echo $content . "\r\n";
+        echo "【info】".$content . "\r\n";
+        echo date("Y-m-d H:i:s") . "\r\n";
         if ($content == 'close') {
             $fd = (int)$stream;
             fclose($stream);

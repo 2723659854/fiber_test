@@ -80,6 +80,9 @@ while (true) {
             if ($fiber->isSuspended()) {
                 $fiber->resume();
             }
+            if ($fiber->isTerminated()) {
+                echo "读协程已死";
+            }
         }
     }
 
@@ -95,16 +98,19 @@ while (true) {
                 if ($fiber->isSuspended()) {
                     $fiber->resume();
                 }
+                $string = date('Y-m-d H:i:s')." 你好，服务端{$fd}\r\n";
+                fwrite($stream, $string);
+                echo "client: ".$string;
                 /** 协程客户端不死 */
-                while(true){
-                    $string = date('Y-m-d H:i:s')." 你好，服务端{$fd}\r\n";
-                    fwrite($stream, $string);
-                    echo "client: ".$string;
-                    // 发送完后，暂停当前协程
-                    //usleep(1000000);
-                    $fiber->suspend();
-                    sleep(1);
-                }
+//                while(true){
+//                    $string = date('Y-m-d H:i:s')." 你好，服务端{$fd}\r\n";
+//                    fwrite($stream, $string);
+//                    echo "client: ".$string;
+//                    // 发送完后，暂停当前协程
+//                    //usleep(1000000);
+//                    $fiber->suspend();
+//                    sleep(10);
+//                }
 
             });
             $writeClientFibers[$fd]->start();
@@ -118,7 +124,7 @@ while (true) {
 
             }
             if ($fiber->isTerminated()){
-                echo "{$fd}协程已结束\r\n";
+                //echo "{$fd}协程已结束\r\n";
             }
         }
     }

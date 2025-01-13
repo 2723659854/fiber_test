@@ -17,6 +17,10 @@ echo "=================================================\r\n";
 $servers = [];
 /** 客户端消息协程数组 */
 $messageFibers = [];
+/** 写写成 */
+$otherFibers = [];
+/** 写服务端 */
+$writeServers = [];
 // 当有新的客户端连接时的回调函数
 $onConnect = function ($clientSocket) {
 
@@ -55,7 +59,7 @@ $onConnect = function ($clientSocket) {
                 echo $data;
                 echo "\r\n";
 
-                fwrite($clientSocket, $data);
+                //fwrite($clientSocket, $data);
             });
             $messageFibers[(int)$clientSocket]->start();
         }else{
@@ -68,6 +72,40 @@ $onConnect = function ($clientSocket) {
     global $servers;
     // 为客户端套接字添加可读事件监听器，当有数据可读时触发$onData回调
     $servers[(int)$clientSocket] = EventLoop::onReadable($clientSocket, $onData);
+
+    // 为客户端添加套字节可写事件
+    $onBuffer = function ()use($clientSocket){
+        global $otherFibers;
+        if (!isset($otherFibers[(int)$clientSocket])) {
+            var_dump("创建写协程");
+            $otherFibers[(int)$clientSocket] = new Fiber(function () use ($clientSocket,$otherFibers){
+                global $writeServers;
+                /** 获取当前协程  */
+                $fiber = Fiber::getCurrent();
+                /** 唤醒协程 */
+                if ($fiber->isSuspended()) {
+                    $fiber->resume();
+                }
+                /** 客户端已关闭，则取消写事件*/
+                if (!is_resource($clientSocket)&& isset($writeServers [(int)$clientSocket])) {
+                    EventLoop::cancel($writeServers [(int)$clientSocket]);
+                    unset($otherFibers[(int)$clientSocket]);
+                }else{
+                    fwrite($clientSocket,'hello world');
+                }
+
+            });
+            $otherFibers[(int)$clientSocket]->start();
+        }else{
+            $fiber = $otherFibers[(int)$clientSocket];
+            if ($fiber->isSuspended()) {
+                var_dump("唤醒写协程");
+                $fiber->resume();
+            }
+        }
+    };
+    global $writeServers;
+    $writeServers[(int)$clientSocket] = EventLoop::onWritable($clientSocket, $onBuffer);
 };
 
 // 为服务器套接字添加可读事件监听器，当有新客户端连接时触发$onConnect回调
