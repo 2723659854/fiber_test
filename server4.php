@@ -63,9 +63,13 @@ while(true){
                        if ($data) {
                            //todo  具体业务逻辑写在这里
                            echo $data . "\r\n";
+                           var_dump("处理业务的时候，挂起协程");
+                           $fiber->suspend();
+                       }else{
+                           var_dump("不处理业务，挂起协程");
+                           /** 读取一次后立即暂停当前协程，切换到其他协程 */
+                           $fiber->suspend();
                        }
-                       /** 读取一次后立即暂停当前协程，切换到其他协程 */
-                       $fiber->suspend();
                    }
                });
                $readFibers[(int)$socket]->start();
