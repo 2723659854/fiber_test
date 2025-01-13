@@ -37,35 +37,46 @@ $onConnect = function ($clientSocket) {
                 }
                 global $servers;
 
-                $data = fread($clientSocket, 1024);
-                if ($data === false) {
-                    // 如果读取数据出错，关闭客户端连接
-                    EventLoop::cancel($servers[(int)$clientSocket]);
-                    unset($messageFibers[(int)$clientSocket]);
-                    return;
+                while(true) {
+                    $metaData = stream_get_meta_data($clientSocket);
+                    if ($metaData['unread_bytes']>0) {
+                        $data = fread($clientSocket, 3);
+                        if ($data === false) {
+                            // 如果读取数据出错，关闭客户端连接
+                            EventLoop::cancel($servers[(int)$clientSocket]);
+                            unset($messageFibers[(int)$clientSocket]);
+                            unset($servers[(int)$clientSocket]);
+                            return;
+                        }
+                        /** 如果读取的数据为空，则暂停当前协程 */
+                        if ($data === "") {
+                            //usleep(2);
+                            $fiber->suspend();
+                            var_dump("读协程已挂起");
+                            return;
+                        }
+                        if (!is_resource($clientSocket)) {
+                            // 连接已断开
+                            EventLoop::cancel($servers[(int)$clientSocket]);
+                            unset($messageFibers[(int)$clientSocket]);
+                            return;
+                        }
+                        echo $data;
+                        echo "\r\n";
+                    }else{
+                        $fiber->suspend();
+                    }
                 }
-                /** 如果读取的数据为空，则暂停当前协程 */
-                if ($data === "") {
-                    usleep(2);
-                    $fiber->suspend();
-                    return;
-                }
-                if (!is_resource($clientSocket)) {
-                    // 连接已断开
-                    EventLoop::cancel($servers[(int)$clientSocket]);
-                    unset($messageFibers[(int)$clientSocket]);
-                    return;
-                }
-                echo $data;
-                echo "\r\n";
-
-                //fwrite($clientSocket, $data);
             });
             $messageFibers[(int)$clientSocket]->start();
         }else{
             /** 如果协程已暂停，则唤醒协程 */
             if ($messageFibers[(int)$clientSocket]->isSuspended()){
                 $messageFibers[(int)$clientSocket]->resume();
+            }
+            if ($messageFibers[(int)$clientSocket]->isTerminated()){
+                $fd = (int)$clientSocket;
+                echo $fd."读协程已死\r\n";
             }
         }
     };
@@ -74,26 +85,39 @@ $onConnect = function ($clientSocket) {
     $servers[(int)$clientSocket] = EventLoop::onReadable($clientSocket, $onData);
 
     // 为客户端添加套字节可写事件
-    $onBuffer = function ()use($clientSocket){
+    $onWrite = function ()use($clientSocket){
         global $otherFibers;
         if (!isset($otherFibers[(int)$clientSocket])) {
             var_dump("创建写协程");
             $otherFibers[(int)$clientSocket] = new Fiber(function () use ($clientSocket,$otherFibers){
                 global $writeServers;
+                var_dump("写协程内部");
                 /** 获取当前协程  */
                 $fiber = Fiber::getCurrent();
                 /** 唤醒协程 */
                 if ($fiber->isSuspended()) {
                     $fiber->resume();
                 }
-                /** 客户端已关闭，则取消写事件*/
-                if (!is_resource($clientSocket)&& isset($writeServers [(int)$clientSocket])) {
-                    EventLoop::cancel($writeServers [(int)$clientSocket]);
-                    unset($otherFibers[(int)$clientSocket]);
-                }else{
-                    fwrite($clientSocket,'hello world');
+                while(true){
+                    /** 客户端已关闭，则取消写事件*/
+                    if (!is_resource($clientSocket)&& isset($writeServers [(int)$clientSocket])) {
+                        EventLoop::cancel($writeServers [(int)$clientSocket]);
+                        unset($otherFibers[(int)$clientSocket]);
+                        unset($writeServers[(int)$clientSocket]);
+                    }else{
+                        var_dump("发送数据给客户端");
+                        $length = @fwrite($clientSocket,'hello world');
+                        if ($length === false) {
+                            break;
+                        }
+                        var_dump($length); var_dump("挂起写协程");
+                        /** 暂停当前协程 保证协程存活 */
+                        $fiber->suspend();
+                    }
                 }
 
+                // 暂停协程，等待更多数据
+                //Fiber::suspend();
             });
             $otherFibers[(int)$clientSocket]->start();
         }else{
@@ -102,10 +126,15 @@ $onConnect = function ($clientSocket) {
                 var_dump("唤醒写协程");
                 $fiber->resume();
             }
+            if ($fiber->isTerminated()){
+                $fd = (int)$clientSocket;
+                echo $fd."写协程已死\r\n";
+                exit;
+            }
         }
     };
     global $writeServers;
-    $writeServers[(int)$clientSocket] = EventLoop::onWritable($clientSocket, $onBuffer);
+    $writeServers[(int)$clientSocket] = EventLoop::onWritable($clientSocket, $onWrite);
 };
 
 // 为服务器套接字添加可读事件监听器，当有新客户端连接时触发$onConnect回调
