@@ -64,6 +64,7 @@ while(true){
                            //todo  具体业务逻辑写在这里
                            echo $data . "\r\n";
                            var_dump("处理业务的时候，挂起协程");
+                           //todo 这里任务如果是阻塞的，那么手动挂起协程，那么就需要手动判断业务是否阻塞，那么需要手动处理mysql客户端，http客户端
                            $fiber->suspend();
                        }else{
                            var_dump("不处理业务，挂起协程");
